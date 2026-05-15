@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>พยากรณ์อากาศ</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Prompt:wght@600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:#0b1120;color:#e2e8f0;min-height:100vh}
+
+header{text-align:center;padding:28px 16px 16px}
+header h1{font-family:'Prompt',sans-serif;font-size:2.4rem;background:linear-gradient(90deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+header p{color:#64748b;margin-top:4px;font-size:.95rem}
+
+/* SEARCH */
+.search-wrap{max-width:680px;margin:0 auto 16px;padding:0 16px;position:relative;z-index:9999}
+.search-row{display:flex;gap:8px}
+#searchInput{
+  flex:1;padding:11px 16px;border-radius:10px;
+  border:2px solid #1e293b;background:#111827;color:#e2e8f0;
+  font-family:'Sarabun',sans-serif;font-size:1rem;outline:none;
+  transition:border .2s
+}
+#searchInput:focus{border-color:#38bdf8}
+#searchInput::placeholder{color:#475569}
+#searchBtn{
+  padding:11px 20px;border-radius:10px;border:none;
+  background:linear-gradient(135deg,#0ea5e9,#6366f1);
+  color:#fff;font-family:'Sarabun',sans-serif;font-size:.95rem;font-weight:600;
+  cursor:pointer;white-space:nowrap;transition:opacity .2s
+}
+#searchBtn:hover{opacity:.85}
+#searchBtn:disabled{opacity:.45;cursor:not-allowed}
+
+/* SUGGESTIONS */
+#suggestions{
+  display:none;position:absolute;top:calc(100% + 4px);left:16px;right:16px;
+  background:#1e293b;border:1px solid #334155;border-radius:10px;
+  box-shadow:0 8px 24px #00000080;overflow:hidden;z-index:9999
+}
+.sug-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid #334155;transition:background .15s}
+.sug-item:last-child{border-bottom:none}
+.sug-item:hover{background:#0ea5e915}
+.sug-name{font-weight:600;font-size:.93rem;color:#f1f5f9}
+.sug-sub{font-size:.76rem;color:#64748b;margin-top:2px}
+
+/* QUICK CITIES */
+.quick-cities{
+  display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
+  max-width:680px;margin:0 auto 24px;padding:0 16px
+}
+.qc{
+  padding:5px 14px;border-radius:20px;border:1px solid #334155;
+  background:transparent;color:#94a3b8;font-family:'Sarabun',sans-serif;
+  font-size:.82rem;cursor:pointer;transition:all .2s
+}
+.qc:hover{border-color:#38bdf8;color:#38bdf8;background:#38bdf808}
+
+/* LAYOUT */
+.main{max-width:1160px;margin:0 auto;padding:0 16px 48px;display:flex;flex-direction:column;gap:20px}
+
+/* MAP */
+.map-box{border-radius:16px;overflow:hidden;border:1px solid #1e293b}
+.map-label{padding:10px 16px;background:#111827;font-size:.82rem;color:#475569;border-bottom:1px solid #1e293b}
+#map{height:400px;width:100%}
+
+/* LOADING */
+#loading{display:none;text-align:center;padding:40px}
+.spin{width:40px;height:40px;border:4px solid #1e293b;border-top-color:#38bdf8;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* WEATHER */
+#wSection{display:none}
+.loc-head{text-align:center;margin-bottom:16px}
+.loc-head h2{font-family:'Prompt',sans-serif;font-size:1.6rem;color:#f1f5f9}
+.loc-head p{color:#475569;font-size:.8rem;margin-top:3px}
+
+/* MAIN CARD */
+.main-card{
+  display:flex;align-items:center;justify-content:space-between;gap:20px;
+  background:linear-gradient(135deg,#0c1f3a,#0f172a);
+  border:1px solid #1e3a5f;border-radius:16px;padding:28px
+}
+.main-card .big-temp{font-family:'Prompt',sans-serif;font-size:4rem;font-weight:700;color:#38bdf8;line-height:1}
+.main-card .desc{font-size:1.1rem;color:#94a3b8;margin-top:8px}
+.main-card .feels{font-size:.85rem;color:#475569;margin-top:6px}
+.main-card .wi{font-size:5rem;line-height:1}
+
+/* GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:16px;transition:border-color .2s}
+.card:hover{border-color:#38bdf8}
+.card .lbl{font-size:.75rem;color:#475569;margin-bottom:10px}
+.card .val{font-family:'Prompt',sans-serif;font-size:1.75rem;font-weight:700}
+.card .unit{font-size:.75rem;color:#475569;margin-top:4px}
+.c1{color:#38bdf8}.c2{color:#22d3ee}.c3{color:#fbbf24}.c4{color:#a78bfa}.c5{color:#818cf8}.c6{color:#fb7185}.c7{color:#4ade80}
+
+/* COMPASS */
+.cmp-wrap{position:relative;width:54px;height:54px;margin:8px auto 0}
+.cmp-ring{width:54px;height:54px;border:2px solid #1e293b;border-radius:50%;position:relative;display:flex;align-items:center;justify-content:center}
+.cmp-n{font-size:.6rem;color:#475569;position:absolute;top:2px;left:50%;transform:translateX(-50%)}
+.cmp-arrow{
+  position:absolute;width:3px;height:20px;
+  background:linear-gradient(to top,#38bdf8,transparent);
+  border-radius:99px;left:50%;top:50%;
+  transform-origin:50% 100%;transform:translateX(-50%) rotate(0deg);
+  transition:transform .5s
+}
+
+/* FORECAST */
+.fc-wrap{background:#111827;border:1px solid #1e293b;border-radius:16px;padding:20px}
+.fc-title{font-size:.85rem;color:#475569;margin-bottom:14px;font-family:'Prompt',sans-serif}
+.fc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+@media(max-width:580px){
+  .fc-grid{grid-template-columns:repeat(4,1fr)}
+  .fc-day:nth-child(n+5){display:none}
+  .main-card .wi{font-size:3rem}
+  .main-card .big-temp{font-size:2.8rem}
+}
+.fc-day{background:#0b1120;border:1px solid #1e293b;border-radius:12px;padding:10px 4px;text-align:center}
+.fc-d{font-size:.68rem;color:#475569;margin-bottom:5px}
+.fc-i{font-size:1.5rem;margin-bottom:3px}
+.fc-hi{font-size:.88rem;font-weight:700;color:#f87171}
+.fc-lo{font-size:.75rem;color:#64748b}
+.fc-r{font-size:.65rem;color:#38bdf8;margin-top:4px}
+.fc-p{font-size:.65rem;color:#818cf8}
+
+/* POPUP */
+.leaflet-popup-content-wrapper{background:#1e293b!important;color:#e2e8f0!important;border:1px solid #334155!important;border-radius:12px!important;font-family:'Sarabun',sans-serif!important;box-shadow:0 8px 20px #00000080!important}
+.leaflet-popup-tip{background:#1e293b!important}
+.leaflet-popup-content{margin:12px 14px!important;min-width:140px}
+.pp-name{font-weight:600;margin-bottom:4px;font-size:.9rem}
+.pp-temp{font-family:'Prompt',sans-serif;font-size:1.5rem;color:#38bdf8;font-weight:700}
+.pp-row{margin-top:5px;display:flex;gap:12px}
+.pp-row span{font-size:.78rem;color:#64748b}
+
+/* ERR */
+#errMsg{display:none;max-width:680px;margin:0 auto 16px;padding:12px 16px;background:#450a0a;border:1px solid #991b1b;border-radius:10px;font-size:.88rem;color:#fca5a5}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛅ พยากรณ์อากาศ</h1>
+  <p>ข้อมูลเรียลไทม์จากทั่วโลก • คลิกแผนที่หรือค้นหาพื้นที่</p>
+</header>
+
+<!-- ERROR -->
+<div id="errMsg"></div>
+
+<!-- SEARCH -->
+<div class="search-wrap">
+  <div class="search-row">
+    <input id="searchInput" type="text" placeholder="ค้นหา เช่น กรุงเทพ, Chiang Mai, Tokyo, London…" autocomplete="off"/>
+    <button id="searchBtn" onclick="doSearch()">ค้นหา</button>
+  </div>
+  <div id="suggestions"></div>
+</div>
+
+<!-- QUICK CITIES -->
+<div class="quick-cities">
+  <button class="qc" onclick="gotoCity(13.7563,100.5018,'กรุงเทพมหานคร')">กรุงเทพฯ</button>
+  <button class="qc" onclick="gotoCity(18.7883,98.9853,'เชียงใหม่')">เชียงใหม่</button>
+  <button class="qc" onclick="gotoCity(7.9519,98.3381,'ภูเก็ต')">ภูเก็ต</button>
+  <button class="qc" onclick="gotoCity(16.4407,102.836,'ขอนแก่น')">ขอนแก่น</button>
+  <button class="qc" onclick="gotoCity(14.9627,102.1348,'นครราชสีมา')">โคราช</button>
+  <button class="qc" onclick="gotoCity(17.4138,102.7829,'อุดรธานี')">อุดรธานี</button>
+  <button class="qc" onclick="gotoCity(7.0069,100.473,'หาดใหญ่')">หาดใหญ่</button>
+  <button class="qc" onclick="gotoCity(1.3521,103.8198,'สิงคโปร์')">สิงคโปร์</button>
+  <button class="qc" onclick="gotoCity(35.6762,139.6503,'โตเกียว')">โตเกียว</button>
+  <button class="qc" onclick="gotoCity(51.5074,-0.1278,'ลอนดอน')">ลอนดอน</button>
+</div>
+
+<div class="main">
+  <!-- MAP -->
+  <div class="map-box">
+    <div class="map-label">🗺️ คลิกที่ใดก็ได้บนแผนที่เพื่อดูข้อมูลอากาศ</div>
+    <div id="map"></div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading"><div class="spin"></div><p style="color:#475569">กำลังโหลดข้อมูล…</p></div>
+
+  <!-- WEATHER SECTION -->
+  <div id="wSection">
+    <div class="loc-head">
+      <h2 id="locName"></h2>
+      <p id="locCoords"></p>
+    </div>
+
+    <!-- MAIN WEATHER -->
+    <div class="main-card" style="margin-bottom:16px">
+      <div>
+        <div class="big-temp" id="wTemp">--</div>
+        <div class="desc" id="wDesc">--</div>
+        <div class="feels" id="wFeels"></div>
+      </div>
+      <div class="wi" id="wIcon">🌡️</div>
+    </div>
+
+    <!-- DETAIL CARDS -->
+    <div class="grid" style="margin-bottom:16px">
+      <div class="card">
+        <div class="lbl">💧 ความชื้น</div>
+        <div class="val c1" id="wHum">--</div>
+        <div class="unit">%</div>
+      </div>
+      <div class="card">
+        <div class="lbl">💨 ความเร็วลม</div>
+        <div class="val c2" id="wWspd">--</div>
+        <div class="unit">กม./ชม.</div>
+        <div class="cmp-wrap">
+          <div class="cmp-ring">
+            <span class="cmp-n">N</span>
+            <div class="cmp-arrow" id="cmpArrow"></div>
+          </div>
+        </div>
+        <div class="unit" id="wWdir" style="text-align:center;margin-top:3px"></div>
+      </div>
+      <div class="card">
+        <div class="lbl">☔ โอกาสฝนตก</div>
+        <div class="val c5" id="wRainP">--</div>
+        <div class="unit">%</div>
+      </div>
+      <div class="card">
+        <div class="lbl">🌧️ ปริมาณฝน</div>
+        <div class="val c1" id="wRain">--</div>
+        <div class="unit">มม./ชม.</div>
+      </div>
+      <div class="card">
+        <div class="lbl">🔵 ความดันอากาศ</div>
+        <div class="val c4" id="wPres">--</div>
+        <div class="unit">hPa</div>
+      </div>
+      <div class="card">
+        <div class="lbl">☁️ เมฆปกคลุม</div>
+        <div class="val c3" id="wCloud">--</div>
+        <div class="unit">%</div>
+      </div>
+    </div>
+
+    <!-- FORECAST -->
+    <div class="fc-wrap">
+      <div class="fc-title">📅 พยากรณ์ 7 วัน</div>
+      <div class="fc-grid" id="fcGrid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── MAP ── */
+const map = L.map('map').setView([13,101],5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© OpenStreetMap contributors',maxZoom:18
+}).addTo(map);
+
+let pin = null;
+
+// คลิกแผนที่ → ดึงอากาศโดยตรงจากพิกัด ไม่ต้อง reverse geocode
+map.on('click', e => {
+  const lat = e.latlng.lat;
+  const lng = e.latlng.lng;
+  const label = `${Math.abs(lat).toFixed(2)}°${lat>=0?'N':'S'}, ${Math.abs(lng).toFixed(2)}°${lng>=0?'E':'W'}`;
+  fetchWeather(lat, lng, label);
+});
+
+/* ── SEARCH ── */
+let debT;
+document.getElementById('searchInput').addEventListener('input', function(){
+  clearTimeout(debT);
+  const q = this.value.trim();
+  if(q.length < 1){ hideSug(); return; }
+  debT = setTimeout(()=> getSuggestions(q), 350);
+});
+document.getElementById('searchInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter') doSearch();
+});
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.search-wrap')) hideSug();
+});
+
+async function getSuggestions(q){
+  try{
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=th&format=json`
+    );
+    if(!res.ok) return;
+    const data = await res.json();
+    if(!data.results || data.results.length===0){ hideSug(); return; }
+    renderSug(data.results);
+  } catch(err){ hideSug(); }
+}
+
+function renderSug(list){
+  const box = document.getElementById('suggestions');
+  box.innerHTML = list.map(r=>{
+    const lat = parseFloat(r.latitude);
+    const lon = parseFloat(r.longitude);
+    const name = r.name || '';
+    const sub = [r.admin1, r.admin2, r.country].filter(Boolean).join(', ');
+    // ใช้ data attributes แทน inline onclick เพื่อหลีกเลี่ยงปัญหา special chars
+    return `<div class="sug-item" data-lat="${lat}" data-lon="${lon}" data-name="${encodeURIComponent(name+', '+sub)}">
+      <div class="sug-name">${name}</div>
+      <div class="sug-sub">${sub}</div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.sug-item').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const lat = parseFloat(el.dataset.lat);
+      const lon = parseFloat(el.dataset.lon);
+      const name = decodeURIComponent(el.dataset.name);
+      hideSug();
+      document.getElementById('searchInput').value='';
+      fetchWeather(lat, lon, name);
+    });
+  });
+  box.style.display='block';
+}
+
+function hideSug(){
+  document.getElementById('suggestions').style.display='none';
+}
+
+async function doSearch(){
+  const q = document.getElementById('searchInput').value.trim();
+  if(!q) return;
+  hideSug();
+  setLoading(true);
+  try{
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=th&format=json`
+    );
+    if(!res.ok) throw new Error('API error');
+    const data = await res.json();
+    if(!data.results || data.results.length===0){
+      setLoading(false);
+      showErr(`ไม่พบ "${q}" ลองพิมพ์ภาษาอังกฤษ เช่น "Chiang Mai", "Bangkok", "Tokyo"`);
+      return;
+    }
+    const r = data.results[0];
+    const name = [r.name, r.admin1, r.country].filter(Boolean).join(', ');
+    document.getElementById('searchInput').value='';
+    fetchWeather(parseFloat(r.latitude), parseFloat(r.longitude), name);
+  } catch(err){
+    setLoading(false);
+    showErr('เชื่อมต่อ API ไม่ได้ กรุณาลองอีกครั้ง');
+  }
+}
+
+function gotoCity(lat, lon, name){
+  fetchWeather(lat, lon, name);
+}
+
+/* ── WEATHER ── */
+async function fetchWeather(lat, lon, name){
+  setLoading(true);
+  hideErr();
+  try{
+    const url =
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,apparent_temperature,weather_code,` +
+      `relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,` +
+      `pressure_msl,cloud_cover` +
+      `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,` +
+      `precipitation_probability_max,weather_code` +
+      `&timezone=auto`;
+
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('Weather API error '+res.status);
+    const data = await res.json();
+    if(!data.current) throw new Error('ข้อมูลไม่สมบูรณ์');
+
+    renderWeather(data, lat, lon, name);
+    placePin(lat, lon, name, data.current);
+  } catch(err){
+    console.error(err);
+    showErr('โหลดข้อมูลอากาศไม่สำเร็จ: '+err.message);
+  }
+  setLoading(false);
+}
+
+function placePin(lat, lon, name, cur){
+  map.setView([lat, lon], Math.max(map.getZoom(), 7));
+  if(pin) map.removeLayer(pin);
+  const w = weatherInfo(cur.weather_code);
+  pin = L.circleMarker([lat,lon],{
+    radius:10, fillColor:'#38bdf8', color:'#fff', weight:2, fillOpacity:.9
+  }).addTo(map);
+  pin.bindPopup(`
+    <div class="pp-name">📍 ${name}</div>
+    <div class="pp-temp">${cur.temperature_2m}°C ${w.icon}</div>
+    <div class="pp-row">
+      <span>💧${cur.relative_humidity_2m}%</span>
+      <span>💨${cur.wind_speed_10m} กม./ชม.</span>
+    </div>
+    <div style="margin-top:4px;color:#64748b;font-size:.78rem">${w.th}</div>
+  `).openPopup();
+}
+
+/* ── RENDER ── */
+function renderWeather(data, lat, lon, name){
+  const c = data.current;
+  const w = weatherInfo(c.weather_code);
+
+  // header
+  document.getElementById('locName').textContent = name;
+  document.getElementById('locCoords').textContent =
+    `ละติจูด ${lat.toFixed(4)}°  |  ลองจิจูด ${lon.toFixed(4)}°`;
+
+  // main
+  document.getElementById('wTemp').textContent  = `${c.temperature_2m}°C`;
+  document.getElementById('wDesc').textContent  = w.th;
+  document.getElementById('wIcon').textContent  = w.icon;
+  document.getElementById('wFeels').textContent = `อุณหภูมิสัมผัส ${c.apparent_temperature}°C`;
+
+  // details
+  document.getElementById('wHum').textContent   = c.relative_humidity_2m ?? '--';
+  document.getElementById('wWspd').textContent  = c.wind_speed_10m ?? '--';
+  document.getElementById('wRain').textContent  = c.precipitation ?? 0;
+  document.getElementById('wPres').textContent  = c.pressure_msl ?? '--';
+  document.getElementById('wCloud').textContent = c.cloud_cover ?? '--';
+
+  // wind dir
+  const deg = c.wind_direction_10m ?? 0;
+  document.getElementById('cmpArrow').style.transform = `translateX(-50%) rotate(${deg}deg)`;
+  document.getElementById('wWdir').textContent = `${deg2dir(deg)} (${deg}°)`;
+
+  // rain prob from today daily
+  const prob = data.daily?.precipitation_probability_max?.[0] ?? '--';
+  document.getElementById('wRainP').textContent = prob;
+
+  // forecast
+  renderForecast(data.daily);
+
+  document.getElementById('wSection').style.display = 'block';
+  setTimeout(()=>{
+    document.getElementById('wSection').scrollIntoView({behavior:'smooth',block:'start'});
+  }, 100);
+}
+
+function renderForecast(daily){
+  if(!daily?.time) return;
+  const days=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  document.getElementById('fcGrid').innerHTML = daily.time.slice(0,7).map((t,i)=>{
+    const date = new Date(t);
+    const w = weatherInfo(daily.weather_code[i]);
+    return `<div class="fc-day">
+      <div class="fc-d">${days[date.getDay()]} ${date.getDate()}/${date.getMonth()+1}</div>
+      <div class="fc-i">${w.icon}</div>
+      <div class="fc-hi">${daily.temperature_2m_max[i]}°</div>
+      <div class="fc-lo">${daily.temperature_2m_min[i]}°</div>
+      <div class="fc-r">💧${daily.precipitation_sum[i]}มม.</div>
+      <div class="fc-p">☔${daily.precipitation_probability_max[i]}%</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── HELPERS ── */
+function setLoading(on){
+  document.getElementById('loading').style.display = on?'block':'none';
+  document.getElementById('searchBtn').disabled = on;
+  if(on) document.getElementById('wSection').style.display='none';
+}
+function showErr(msg){
+  const el = document.getElementById('errMsg');
+  el.textContent = '⚠️ '+msg;
+  el.style.display='block';
+}
+function hideErr(){
+  document.getElementById('errMsg').style.display='none';
+}
+
+function deg2dir(d){
+  return ['เหนือ','ตอ.น.','ตะวันออก','ตอ.ต.','ใต้','ตต.ต.','ตะวันตก','ตต.น.'][Math.round(d/45)%8];
+}
+
+function weatherInfo(code){
+  const m={
+    0:{th:'ท้องฟ้าแจ่มใส',icon:'☀️'},
+    1:{th:'ส่วนใหญ่แจ่มใส',icon:'🌤️'},
+    2:{th:'เมฆบางส่วน',icon:'⛅'},
+    3:{th:'เมฆมาก',icon:'☁️'},
+    45:{th:'หมอก',icon:'🌫️'},
+    48:{th:'หมอกเยือกแข็ง',icon:'🌫️'},
+    51:{th:'ฝนปรอยเบา',icon:'🌦️'},
+    53:{th:'ฝนปรอยปานกลาง',icon:'🌦️'},
+    55:{th:'ฝนปรอยหนัก',icon:'🌧️'},
+    61:{th:'ฝนเบา',icon:'🌧️'},
+    63:{th:'ฝนปานกลาง',icon:'🌧️'},
+    65:{th:'ฝนหนัก',icon:'🌧️'},
+    71:{th:'หิมะเบา',icon:'🌨️'},
+    73:{th:'หิมะปานกลาง',icon:'❄️'},
+    75:{th:'หิมะหนัก',icon:'❄️'},
+    80:{th:'ฝนชั่วคราวเบา',icon:'🌦️'},
+    81:{th:'ฝนชั่วคราวปานกลาง',icon:'🌧️'},
+    82:{th:'ฝนชั่วคราวหนัก',icon:'⛈️'},
+    95:{th:'ฝนฟ้าคะนอง',icon:'⛈️'},
+    96:{th:'ฝนฟ้าคะนอง+ลูกเห็บ',icon:'⛈️'},
+    99:{th:'ฝนฟ้าคะนองรุนแรง',icon:'⛈️'},
+  };
+  return m[code] ?? {th:'ไม่ระบุ',icon:'🌡️'};
+}
+</script>
+</body>
+</html>
